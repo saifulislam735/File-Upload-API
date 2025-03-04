@@ -8,6 +8,7 @@ __pycache__/
 
 # Logs (if you add logging later)
 *.log
+
 .env
 # Temporary files
 *.tmp
@@ -18,4 +19,4 @@ __pycache__/
 Thumbs.db  # Windows
 
 # Sensitive config (optional, see note below)
-/app/config.py
+# /app/config.py
