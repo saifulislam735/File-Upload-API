@@ -60,7 +60,7 @@ A simple FastAPI app to upload files, JSON, and text to MongoDB Atlas GridFS, wi
 
 ## Share
 
-- Tell your friend on the same Wi-Fi:
+- Within Same Network
   - API: `http://172.16.225.76:8000/docs`
   - UI: `http://172.16.225.76:8001`
 
@@ -68,15 +68,3 @@ A simple FastAPI app to upload files, JSON, and text to MongoDB Atlas GridFS, wi
 
 - **No Access**: Check Wi-Fi, allow port 8000 in firewall.
 - **Errors**: Verify `.env` URI, ensure server’s running.
-
----
-
-### How to Add
-
-1. Create `README.md` in `E:\File-Upload-API\File-Upload-API`.
-2. Copy-paste this text.
-3. Save.
-
-### Share
-
-- “Hey friend, open `http://172.16.225.76:8000/docs` or `http://172.16.225.76:8001`—use my Wi-Fi!”
