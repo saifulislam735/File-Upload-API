@@ -1,1 +1,2 @@
-uvicorn app.main:app --reload
+for mine : uvicorn app.main:app --reload
+for local network :
