@@ -1,0 +1,21 @@
+# Virtual environment
+venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs (if you add logging later)
+*.log
+.env
+# Temporary files
+*.tmp
+*.bak
+
+# System files
+.DS_Store  # Mac
+Thumbs.db  # Windows
+
+# Sensitive config (optional, see note below)
+/app/config.py
