@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>File Upload App</h1>
+
+        <!-- Upload Form -->
+        <section class="upload-section">
+            <h2>Upload a File</h2>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <input type="file" name="file" id="fileInput" required>
+                <button type="submit">Upload</button>
+            </form>
+            <p id="uploadMessage"></p>
+        </section>
+
+        <!-- File List -->
+        <section class="file-list-section">
+            <h2>Your Files</h2>
+            <button id="refreshFiles">Refresh List</button>
+            <table id="fileTable">
+                <thead>
+                    <tr>
+                        <th>S.No</th>
+                        <th>Filename</th>
+                        <th>File Type</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="fileList"></tbody>
+            </table>
+        </section>
+    </div>
+
+    <script>
+        const apiUrl = "http://127.0.0.1:8000";
+
+        // Upload file
+        document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById("fileInput");
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            try {
+                const response = await fetch(`${apiUrl}/upload/`, {
+                    method: "POST",
+                    body: formData
+                });
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                const result = await response.json();
+                document.getElementById("uploadMessage").textContent = result.message;
+                loadFiles();
+            } catch (error) {
+                document.getElementById("uploadMessage").textContent = "Error uploading file!";
+                console.error("Upload error:", error);
+            }
+        });
+
+        // Load file list (most recent first)
+        async function loadFiles() {
+            const fileList = document.getElementById("fileList");
+            fileList.innerHTML = "";
+
+            try {
+                const response = await fetch(`${apiUrl}/files/`);
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                const data = await response.json();
+                console.log("Files:", data.files);
+
+                const files = data.files.reverse();
+                files.forEach((file, index) => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td>${index + 1}</td>
+                        <td>${file.filename}</td>
+                        <td>${file.content_type}</td>
+                        <td>
+                            <button onclick="downloadFile('${file.file_id}', '${file.bucket}', '${file.filename}')">Download</button>
+                            <input type="file" id="updateInput-${file.file_id}">
+                            <button onclick="updateFile('${file.file_id}', '${file.bucket}')">Update</button>
+                            <button onclick="deleteFile('${file.file_id}', '${file.bucket}')">Delete</button>
+                        </td>
+                    `;
+                    fileList.appendChild(tr);
+                });
+            } catch (error) {
+                console.error("Error loading files:", error);
+            }
+        }
+
+        // Download file
+        async function downloadFile(fileId, bucket, filename) {
+            try {
+                const response = await fetch(`${apiUrl}/file/${fileId}/${bucket}`);
+                if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = filename;
+                a.click();
+            } catch (error) {
+                console.error("Download error:", error);
+                alert("Failed to download file!");
+            }
+        }
+
+        // Update file
+        async function updateFile(fileId, bucket) {
+            try {
+                const fileInput = document.getElementById(`updateInput-${fileId}`);
+                const formData = new FormData();
+                formData.append("file", fileInput.files[0]);
+
+                const response = await fetch(`${apiUrl}/file/${fileId}/${bucket}`, {
+                    method: "PUT",
+                    body: formData
+                });
+                if (!response.ok) throw new Error(`Update failed: ${response.status}`);
+                const result = await response.json();
+                alert(result.message);
+                loadFiles();
+            } catch (error) {
+                console.error("Update error:", error);
+                alert("Failed to update file!");
+            }
+        }
+
+        // Delete file
+        async function deleteFile(fileId, bucket) {
+            try {
+                const response = await fetch(`${apiUrl}/file/${fileId}/${bucket}`, {
+                    method: "DELETE"
+                });
+                if (!response.ok) throw new Error(`Delete failed: ${response.status}`);
+                const result = await response.json();
+                alert(result.message);
+                loadFiles();
+            } catch (error) {
+                console.error("Delete error:", error);
+                alert("Failed to delete file!");
+            }
+        }
+
+        document.getElementById("refreshFiles").addEventListener("click", loadFiles);
+        window.onload = loadFiles;
+    </script>
+</body>
+</html>
