@@ -1,8 +1,12 @@
 from pymongo import MongoClient
-from gridfs import GridFS # GridFS (a way to store files in chunks).
+from gridfs import GridFS
 from app.config import MONGODB_URI
 
-# Connect to MongoDB AtlaI
+# Connect to MongoDB Atlas
 mongo_client = MongoClient(MONGODB_URI)
-db = mongo_client["file_upload_db"]  # Our database name
-gridfs = GridFS(db)  # For storing big files
+db = mongo_client["file_upload_db"]
+
+# Define separate GridFS buckets
+pdf_gridfs = GridFS(db, collection="pdf")      # For PDFs
+image_gridfs = GridFS(db, collection="image")  # For images
+other_gridfs = GridFS(db, collection="other")  # For other files
