@@ -1,2 +1,5 @@
-for mine : uvicorn app.main:app --reload
-for local network :
+fastapi==0.112.2
+uvicorn==0.30.6
+pymongo==4.8.0
+python-dotenv==1.0.1
+python-multipart==0.0.9
