@@ -20,7 +20,7 @@ app = FastAPI(title="My File Upload API")
 async def root():
     return {"message": "I am alive"}
 
-origins = ["https://cheerful-froyo-4df5ef.netlify.app/"]
+origins = ["https://cheerful-froyo-4df5ef.netlify.app"]
 
 app.add_middleware(
     CORSMiddleware,
