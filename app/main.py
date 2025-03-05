@@ -1,11 +1,13 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from app.db import pdf_gridfs, image_gridfs, other_gridfs  # Import all buckets
+from app.db import pdf_gridfs, image_gridfs, json_gridfs, other_gridfs  # Import all buckets
 from app.config import MAX_FILE_SIZE, ALLOWED_TYPES
 from bson.objectid import ObjectId
 import io
 import logging
+import json
+from io import BytesIO
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +31,8 @@ def get_gridfs_bucket(content_type):
         return pdf_gridfs, "pdf"
     elif content_type in {"image/jpeg", "image/png"}:
         return image_gridfs, "image"
+    elif content_type in {"application/json"}:
+        return json_gridfs, "json"
     else:
         return other_gridfs, "other"
 
@@ -36,6 +40,7 @@ def get_gridfs_bucket(content_type):
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
     try:
+        logger.info(f"File content type: {file.content_type}")
         if file.content_type not in ALLOWED_TYPES:
             logger.error(f"Invalid file type: {file.content_type}")
             raise HTTPException(status_code=400, detail="File type not allowed")
@@ -43,8 +48,26 @@ async def upload_file(file: UploadFile = File(...)):
             logger.error(f"File too large: {file.size} bytes")
             raise HTTPException(status_code=400, detail="File too big (max 5MB)")
         
+        
+        
         content = await file.read()
         gridfs_bucket, bucket_name = get_gridfs_bucket(file.content_type)
+
+        # if file.content_type == "application/json":
+        #     try:
+        #         #         # Parse the content to JSON
+        #         # json_data = json.load(BytesIO(content))
+                
+        #         # # Insert the JSON data into MongoDB
+        #         # result = gridfs_bucket.insert_one(json_data)
+        #         file_id = gridfs_bucket.put(file_content, filename=file.filename)
+                
+        #         # Return a response with the inserted record's id
+        #         return JSONResponse(content={"message": "File uploaded and data saved", "id": str(result.inserted_id)}, status_code=200)
+            
+        #     except Exception as e:
+        #         return JSONResponse(content={"error": str(e)}, status_code=400)
+
         file_id = gridfs_bucket.put(content, filename=file.filename, content_type=file.content_type)
         logger.info(f"Uploaded file: {file.filename}, ID: {file_id}, Bucket: {bucket_name}")
         
