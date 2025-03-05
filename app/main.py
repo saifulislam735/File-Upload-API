@@ -69,6 +69,21 @@ async def list_files():
         logger.error(f"List files error: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
+# Get file for specific file type
+@app.get("/file/{bucket}")
+async def get_files_in_type(bucket: str):
+    try:
+        gridfs_bucket = {"pdf": pdf_gridfs, "image": image_gridfs, "other": other_gridfs}[bucket]
+        files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": bucket} for f in gridfs_bucket.find()]
+        # file_data = gridfs_bucket.get(ObjectId(file_id))
+        logger.info(f"Listed {len(files)} files")
+        return {"files": files}
+    except Exception as e:
+        logger.error(f"List files error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 # Get a file (download/stream)
 @app.get("/file/{file_id}/{bucket}")
 async def get_file(file_id: str, bucket: str):
