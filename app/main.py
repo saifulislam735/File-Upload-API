@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(title="My File Upload API")
 
+@app.get("/")
+async def root():
+    return {"message": "I am alive"}
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
