@@ -4,7 +4,8 @@ from app.config import MONGODB_URI
 
 # Connect to MongoDB Atlas
 mongo_client = MongoClient(MONGODB_URI)
-db = mongo_client["file_upload_db"]
+# db = mongo_client["file_upload_db"] #Atlas
+db = mongo_client["Shahinur"] #local
 
 # Define separate GridFS buckets
 pdf_gridfs = GridFS(db, collection="pdf")      # For PDFs
