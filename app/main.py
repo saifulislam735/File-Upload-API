@@ -83,6 +83,7 @@ async def list_files():
         # Collect files from all buckets
         pdf_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "pdf"} for f in pdf_gridfs.find()]
         image_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "image"} for f in image_gridfs.find()]
+        # json_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "image"} for f in json_gridfs.find()]
         other_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "other"} for f in other_gridfs.find()]
         
         file_list = pdf_files + image_files + other_files
@@ -111,7 +112,7 @@ async def get_files_in_type(bucket: str):
 @app.get("/file/{file_id}/{bucket}")
 async def get_file(file_id: str, bucket: str):
     try:
-        gridfs_bucket = {"pdf": pdf_gridfs, "image": image_gridfs, "other": other_gridfs}[bucket]
+        gridfs_bucket = {"pdf": pdf_gridfs, "image": image_gridfs, "json":json_gridfs, "other": other_gridfs}[bucket]
         file_data = gridfs_bucket.get(ObjectId(file_id))
         logger.info(f"Streaming file: {file_data.filename}, ID: {file_id}, Bucket: {bucket}")
         return StreamingResponse(
@@ -149,7 +150,7 @@ async def update_file(file_id: str, bucket: str, file: UploadFile = File(...)):
 @app.delete("/file/{file_id}/{bucket}")
 async def delete_file(file_id: str, bucket: str):
     try:
-        gridfs_bucket = {"pdf": pdf_gridfs, "image": image_gridfs, "other": other_gridfs}[bucket]
+        gridfs_bucket = {"pdf": pdf_gridfs, "image": image_gridfs, "json":json_gridfs, "other": other_gridfs}[bucket]
         gridfs_bucket.delete(ObjectId(file_id))
         logger.info(f"Deleted file ID: {file_id}, Bucket: {bucket}")
         return {"message": "File deleted!"}
