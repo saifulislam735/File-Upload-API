@@ -20,13 +20,14 @@ app = FastAPI(title="My File Upload API")
 async def root():
     return {"message": "I am alive"}
 
-# Add CORS middleware
+origins = ["https://cheerful-froyo-4df5ef.netlify.app"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=origins,  # Only allow requests from this frontend
+    allow_credentials=True,  # Allow cookies for authentication
+    allow_methods=["GET", "POST", "PUT", "DELETE"],  # Allowed HTTP methods
+    allow_headers=["Authorization", "Content-Type"],  # Allowed headers
 )
 
 # Helper function to choose the GridFS bucket based on content_type
@@ -53,7 +54,6 @@ async def upload_file(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="File too big (max 5MB)")
         
         
-        
         content = await file.read()
         gridfs_bucket, bucket_name = get_gridfs_bucket(file.content_type)
 
@@ -65,7 +65,6 @@ async def upload_file(file: UploadFile = File(...)):
         #         # # Insert the JSON data into MongoDB
         #         # result = gridfs_bucket.insert_one(json_data)
         #         file_id = gridfs_bucket.put(file_content, filename=file.filename)
-                
         #         # Return a response with the inserted record's id
         #         return JSONResponse(content={"message": "File uploaded and data saved", "id": str(result.inserted_id)}, status_code=200)
             
