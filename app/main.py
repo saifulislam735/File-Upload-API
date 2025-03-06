@@ -1,13 +1,14 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from app.db import pdf_gridfs, image_gridfs, json_gridfs, other_gridfs  # Import all buckets
+from app.db import db, pdf_gridfs, image_gridfs, json_gridfs, other_gridfs  # Import all buckets
 from app.config import MAX_FILE_SIZE, ALLOWED_TYPES
 from bson.objectid import ObjectId
 import io
 import logging
 import json
 from io import BytesIO
+import PyPDF2
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -20,8 +21,8 @@ app = FastAPI(title="My File Upload API")
 async def root():
     return {"message": "I am alive"}
 
-origins = ["https://cheerful-froyo-4df5ef.netlify.app"]
-# origins = ["*"]
+# origins = ["https://cheerful-froyo-4df5ef.netlify.app"]
+origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -41,6 +42,12 @@ def get_gridfs_bucket(content_type):
         return json_gridfs, "json"
     else:
         return other_gridfs, "other"
+
+# Function to extract text from PDF
+def extract_text_from_pdf(file_bytes):
+    reader = PyPDF2.PdfReader(BytesIO(file_bytes))
+    text = " ".join([page.extract_text() for page in reader.pages if page.extract_text()])
+    return text.strip()
 
 # Upload a file
 @app.post("/upload/")
@@ -74,6 +81,14 @@ async def upload_file(file: UploadFile = File(...)):
 
         file_id = gridfs_bucket.put(content, filename=file.filename, content_type=file.content_type)
         logger.info(f"Uploaded file: {file.filename}, ID: {file_id}, Bucket: {bucket_name}")
+
+        if bucket_name == "pdf":
+            extracted_text = extract_text_from_pdf(content)
+            db.pdfContent.insert_one({
+                "filename": file.filename,
+                "content": extracted_text,
+                "file_id": file_id
+            })
         
         return {"filename": file.filename, "file_id": str(file_id), "bucket": bucket_name, "message": "File uploaded!"}
     except Exception as e:
@@ -110,6 +125,18 @@ async def get_files_in_type(bucket: str):
     except Exception as e:
         logger.error(f"List files error: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# Endpoint to search PDFs by word
+@app.get("/search/")
+async def search_pdf_by_word(word: str):
+    results = db.pdfContent.find({"content": {"$regex": word, "$options": "i"}})
+    matched_files = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in results]
+    
+    if not matched_files:
+        raise HTTPException(status_code=404, detail="No matching PDFs found")
+    
+    return {"matched_pdfs": matched_files}
 
 
 # Get a file (download/stream)
