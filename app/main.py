@@ -21,6 +21,7 @@ async def root():
     return {"message": "I am alive"}
 
 origins = ["https://cheerful-froyo-4df5ef.netlify.app"]
+# origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,

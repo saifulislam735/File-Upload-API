@@ -1,6 +1,6 @@
 # Virtual environment
 venv/
-
+cread.txt
 # Python cache files
 __pycache__/
 *.py[cod]
