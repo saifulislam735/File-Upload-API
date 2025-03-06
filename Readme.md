@@ -82,3 +82,6 @@ A simple FastAPI app to upload files, JSON, and text to MongoDB Atlas GridFS, wi
 
 - **No Access**: Check Wi-Fi, allow port 8000 in firewall.
 - **Errors**: Verify `.env` URI, ensure server’s running.
+
+## Visual Flow
+[User] → 📂 Pick File → 🌐 Frontend → ⚙️ Backend → 🗄️ Database → 📩 Response
