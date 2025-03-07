@@ -10,5 +10,14 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE"))
 
 
-ALLOWED_TYPES = {"image/jpeg", "image/png", "application/pdf", "text/plain", "application/json"}
+ALLOWED_TYPES = {
+    "image/jpeg", 
+    "image/png", 
+    "application/pdf", 
+    "text/plain", 
+    "application/json",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
+    "application/msword",  # .doc
+    "text/csv"
+}
 # print(ALLOWED_TYPES)

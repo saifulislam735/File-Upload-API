@@ -1,14 +1,17 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi import FastAPI, UploadFile, File, HTTPException 
+from fastapi.responses import StreamingResponse, JSONResponse 
 from fastapi.middleware.cors import CORSMiddleware
-from app.db import db, pdf_gridfs, image_gridfs, json_gridfs, other_gridfs  # Import all buckets
+from app.db import db, pdf_gridfs, image_gridfs, json_gridfs, other_gridfs, word_gridfs, text_gridfs, csv_gridfs  # Import all buckets
 from app.config import MAX_FILE_SIZE, ALLOWED_TYPES
-from bson.objectid import ObjectId
+from bson.objectid import ObjectId   
 import io
 import logging
 import json
 from io import BytesIO
-import PyPDF2
+import PyPDF2 
+from docx import Document 
+from motor.motor_asyncio import AsyncIOMotorClient   
+
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -23,6 +26,10 @@ async def root():
 
 # origins = ["https://cheerful-froyo-4df5ef.netlify.app"]
 origins = ["*"]
+
+#Bucket and Gridfs Dictionary
+bucket_gridfs_dict = {"pdf": pdf_gridfs, "image": image_gridfs, "json": json_gridfs, "other": other_gridfs, "word": word_gridfs, "text": text_gridfs, "csv": csv_gridfs}
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -40,6 +47,12 @@ def get_gridfs_bucket(content_type):
         return image_gridfs, "image"
     elif content_type in {"application/json"}:
         return json_gridfs, "json"
+    elif content_type in {"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"}:
+        return word_gridfs, "word"
+    elif content_type in {"text/plain"}:
+        return word_gridfs, "text"
+    elif content_type in {"text/csv"}:
+        return word_gridfs, "csv"
     else:
         return other_gridfs, "other"
 
@@ -48,6 +61,12 @@ def extract_text_from_pdf(file_bytes):
     reader = PyPDF2.PdfReader(BytesIO(file_bytes))
     text = " ".join([page.extract_text() for page in reader.pages if page.extract_text()])
     return text.strip()
+
+# Extract text from a .docx file.
+def extract_text_from_docx(file_data: bytes) -> str:
+    doc = Document(io.BytesIO(file_data))
+    return "\n".join([para.text for para in doc.paragraphs])
+
 
 # Upload a file
 @app.post("/upload/")
@@ -65,28 +84,43 @@ async def upload_file(file: UploadFile = File(...)):
         content = await file.read()
         gridfs_bucket, bucket_name = get_gridfs_bucket(file.content_type)
 
-        # if file.content_type == "application/json":
-        #     try:
-        #         #         # Parse the content to JSON
-        #         # json_data = json.load(BytesIO(content))
-                
-        #         # # Insert the JSON data into MongoDB
-        #         # result = gridfs_bucket.insert_one(json_data)
-        #         file_id = gridfs_bucket.put(file_content, filename=file.filename)
-        #         # Return a response with the inserted record's id
-        #         return JSONResponse(content={"message": "File uploaded and data saved", "id": str(result.inserted_id)}, status_code=200)
-            
-        #     except Exception as e:
-        #         return JSONResponse(content={"error": str(e)}, status_code=400)
-
         file_id = gridfs_bucket.put(content, filename=file.filename, content_type=file.content_type)
         logger.info(f"Uploaded file: {file.filename}, ID: {file_id}, Bucket: {bucket_name}")
 
+        #Store pdf content
         if bucket_name == "pdf":
             extracted_text = extract_text_from_pdf(content)
             db.pdfContent.insert_one({
                 "filename": file.filename,
                 "content": extracted_text,
+                "file_id": file_id
+            })
+
+        #Store word content
+        if bucket_name == "word":
+            text = extract_text_from_docx(content)
+            db.wordContent.insert_one({
+                "filename": file.filename, 
+                "content": text,
+                "file_id": file_id
+            })
+
+        #Store txt content
+        if bucket_name == "text":
+            text_data = content.decode("utf-8")
+            db.txtContent.insert_one({
+                "filename": file.filename, 
+                "content": text_data,
+                "file_id": file_id
+            })
+
+        #Store JSON as JSON and content
+        if bucket_name == "json":
+            json_data = json.load(BytesIO(content))
+            db.jsonContent.insert_one({
+                "filename": file.filename,
+                "json_object": json_data,
+                "content": content.decode("utf-8"),
                 "file_id": file_id
             })
         
@@ -102,10 +136,13 @@ async def list_files():
         # Collect files from all buckets
         pdf_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "pdf"} for f in pdf_gridfs.find()]
         image_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "image"} for f in image_gridfs.find()]
-        # json_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "image"} for f in json_gridfs.find()]
+        json_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "image"} for f in json_gridfs.find()]
         other_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "other"} for f in other_gridfs.find()]
+        word_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "other"} for f in word_gridfs.find()]
+        text_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "other"} for f in text_gridfs.find()]
+        csv_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "other"} for f in csv_gridfs.find()]
         
-        file_list = pdf_files + image_files + other_files
+        file_list = pdf_files + image_files + json_files + other_files + word_files + text_files + csv_files
         logger.info(f"Listed {len(file_list)} files")
         return {"files": file_list}
     except Exception as e:
@@ -117,7 +154,7 @@ async def list_files():
 @app.get("/file/{bucket}")
 async def get_files_in_type(bucket: str):
     try:
-        gridfs_bucket = {"pdf": pdf_gridfs, "image": image_gridfs, "other": other_gridfs}[bucket]
+        gridfs_bucket = bucket_gridfs_dict[bucket]
         files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": bucket} for f in gridfs_bucket.find()]
         # file_data = gridfs_bucket.get(ObjectId(file_id))
         logger.info(f"Listed {len(files)} files")
@@ -130,8 +167,17 @@ async def get_files_in_type(bucket: str):
 # Endpoint to search PDFs by word
 @app.get("/search/")
 async def search_pdf_by_word(word: str):
-    results = db.pdfContent.find({"content": {"$regex": word, "$options": "i"}})
-    matched_files = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in results]
+    resultsPDF = db.pdfContent.find({"content": {"$regex": word, "$options": "i"}})
+    resultsWord = db.wordContent.find({"content": {"$regex": word, "$options": "i"}})
+    resultsTxt = db.txtContent.find({"content": {"$regex": word, "$options": "i"}})
+    resultsJSON = db.jsonContent.find({"content": {"$regex": word, "$options": "i"}})
+    
+    matched_file_PDF = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsPDF]
+    matched_file_Word = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsWord]
+    matched_file_Txt = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsTxt]
+    matched_file_JSON = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsJSON]
+    
+    matched_files = matched_file_PDF + matched_file_Word + matched_file_Txt + matched_file_JSON
     
     if not matched_files:
         raise HTTPException(status_code=404, detail="No matching PDFs found")
@@ -143,7 +189,7 @@ async def search_pdf_by_word(word: str):
 @app.get("/file/{file_id}/{bucket}")
 async def get_file(file_id: str, bucket: str):
     try:
-        gridfs_bucket = {"pdf": pdf_gridfs, "image": image_gridfs, "json":json_gridfs, "other": other_gridfs}[bucket]
+        gridfs_bucket = bucket_gridfs_dict[bucket]
         file_data = gridfs_bucket.get(ObjectId(file_id))
         logger.info(f"Streaming file: {file_data.filename}, ID: {file_id}, Bucket: {bucket}")
         return StreamingResponse(
@@ -166,7 +212,7 @@ async def update_file(file_id: str, bucket: str, file: UploadFile = File(...)):
             logger.error(f"File too large for update: {file.size} bytes")
             raise HTTPException(status_code=400, detail="File too big (max 5MB)")
         
-        gridfs_bucket = {"pdf": pdf_gridfs, "image": image_gridfs, "other": other_gridfs}[bucket]
+        gridfs_bucket = bucket_gridfs_dict[bucket]
         gridfs_bucket.delete(ObjectId(file_id))
         content = await file.read()
         new_file_id = gridfs_bucket.put(content, filename=file.filename, content_type=file.content_type, _id=ObjectId(file_id))
@@ -181,7 +227,7 @@ async def update_file(file_id: str, bucket: str, file: UploadFile = File(...)):
 @app.delete("/file/{file_id}/{bucket}")
 async def delete_file(file_id: str, bucket: str):
     try:
-        gridfs_bucket = {"pdf": pdf_gridfs, "image": image_gridfs, "json":json_gridfs, "other": other_gridfs}[bucket]
+        gridfs_bucket = bucket_gridfs_dict[bucket]
         gridfs_bucket.delete(ObjectId(file_id))
         logger.info(f"Deleted file ID: {file_id}, Bucket: {bucket}")
         return {"message": "File deleted!"}
