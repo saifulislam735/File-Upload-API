@@ -10,7 +10,9 @@ import json
 from io import BytesIO
 import PyPDF2 
 from docx import Document 
-from motor.motor_asyncio import AsyncIOMotorClient   
+from motor.motor_asyncio import AsyncIOMotorClient  
+import pandas as pd
+import chardet 
 
 
 # Set up logging
@@ -50,9 +52,9 @@ def get_gridfs_bucket(content_type):
     elif content_type in {"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"}:
         return word_gridfs, "word"
     elif content_type in {"text/plain"}:
-        return word_gridfs, "text"
+        return text_gridfs, "text"
     elif content_type in {"text/csv"}:
-        return word_gridfs, "csv"
+        return csv_gridfs, "csv"
     else:
         return other_gridfs, "other"
 
@@ -67,15 +69,20 @@ def extract_text_from_docx(file_data: bytes) -> str:
     doc = Document(io.BytesIO(file_data))
     return "\n".join([para.text for para in doc.paragraphs])
 
+#Detects encoding of a file using chardet.
+def detect_encoding(file_bytes):
+    result = chardet.detect(file_bytes)
+    return result["encoding"]
+
 
 # Upload a file
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
     try:
-        logger.info(f"File content type: {file.content_type}")
-        if file.content_type not in ALLOWED_TYPES:
-            logger.error(f"Invalid file type: {file.content_type}")
-            raise HTTPException(status_code=400, detail="File type not allowed")
+        # logger.info(f"File content type: {file.content_type}")
+        # if file.content_type not in ALLOWED_TYPES:
+        #     logger.error(f"Invalid file type: {file.content_type}")
+        #     raise HTTPException(status_code=400, detail="File type not allowed")
         if file.size > MAX_FILE_SIZE:
             logger.error(f"File too large: {file.size} bytes")
             raise HTTPException(status_code=400, detail="File too big (max 5MB)")
@@ -124,6 +131,17 @@ async def upload_file(file: UploadFile = File(...)):
                 "file_id": file_id
             })
         
+        #Store CSV content
+        if bucket_name == "csv":
+            encoding = detect_encoding(content)
+            df = pd.read_csv(io.BytesIO(content), dtype=str, encoding=encoding, header=None)
+            text_content = "\n".join(df.astype(str).apply(lambda x: ", ".join(x), axis=1))
+            db.csvContent.insert_one({
+                "filename": file.filename,
+                "content": text_content,
+                "file_id": file_id
+            })
+
         return {"filename": file.filename, "file_id": str(file_id), "bucket": bucket_name, "message": "File uploaded!"}
     except Exception as e:
         logger.error(f"Upload error: {str(e)}")
@@ -164,20 +182,22 @@ async def get_files_in_type(bucket: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-# Endpoint to search PDFs by word
+# Endpoint to search word
 @app.get("/search/")
 async def search_pdf_by_word(word: str):
     resultsPDF = db.pdfContent.find({"content": {"$regex": word, "$options": "i"}})
     resultsWord = db.wordContent.find({"content": {"$regex": word, "$options": "i"}})
     resultsTxt = db.txtContent.find({"content": {"$regex": word, "$options": "i"}})
     resultsJSON = db.jsonContent.find({"content": {"$regex": word, "$options": "i"}})
+    resultsCSV = db.csvContent.find({"content": {"$regex": word, "$options": "i"}})
     
     matched_file_PDF = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsPDF]
     matched_file_Word = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsWord]
     matched_file_Txt = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsTxt]
     matched_file_JSON = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsJSON]
+    matched_file_CSV = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsCSV]
     
-    matched_files = matched_file_PDF + matched_file_Word + matched_file_Txt + matched_file_JSON
+    matched_files = matched_file_PDF + matched_file_Word + matched_file_Txt + matched_file_JSON + matched_file_CSV
     
     if not matched_files:
         raise HTTPException(status_code=404, detail="No matching PDFs found")
