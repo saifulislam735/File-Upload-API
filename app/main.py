@@ -74,7 +74,6 @@ def detect_encoding(file_bytes):
     result = chardet.detect(file_bytes)
     return result["encoding"]
 
-
 # Upload a file
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
@@ -85,11 +84,16 @@ async def upload_file(file: UploadFile = File(...)):
         #     raise HTTPException(status_code=400, detail="File type not allowed")
         if file.size > MAX_FILE_SIZE:
             logger.error(f"File too large: {file.size} bytes")
-            raise HTTPException(status_code=400, detail="File too big (max 5MB)")
-        
+            raise HTTPException(status_code=400, detail="File too big (max 5MB)")   
         
         content = await file.read()
         gridfs_bucket, bucket_name = get_gridfs_bucket(file.content_type)
+
+        # Check if a file with the same name already exists in the bucket
+        existing_file = gridfs_bucket.find_one({"filename": file.filename})
+        if existing_file:
+            logger.error(f"File already exists: {file.filename}")
+            raise HTTPException(status_code=400, detail="File with the same name already exists")
 
         file_id = gridfs_bucket.put(content, filename=file.filename, content_type=file.content_type)
         logger.info(f"Uploaded file: {file.filename}, ID: {file_id}, Bucket: {bucket_name}")
@@ -145,7 +149,7 @@ async def upload_file(file: UploadFile = File(...)):
         return {"filename": file.filename, "file_id": str(file_id), "bucket": bucket_name, "message": "File uploaded!"}
     except Exception as e:
         logger.error(f"Upload error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error or ")
 
 # Get all files (list)
 @app.get("/files/")
