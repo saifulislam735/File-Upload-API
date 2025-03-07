@@ -10,4 +10,7 @@ db = mongo_client["file_upload_db"] #Atlas
 pdf_gridfs = GridFS(db, collection="pdf")      # For PDFs
 image_gridfs = GridFS(db, collection="image")  # For images
 json_gridfs = GridFS(db, collection="json")  # For json file
+word_gridfs = GridFS(db, collection="word")  # For word file
+text_gridfs = GridFS(db, collection="text")  # For text file
+csv_gridfs = GridFS(db, collection="csv")  # For csv file
 other_gridfs = GridFS(db, collection="other")  # For other files
