@@ -16,8 +16,8 @@ ALLOWED_TYPES = {
     "application/pdf", 
     "text/plain", 
     "application/json",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
-    "application/msword",  # .doc
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+    "application/msword",  
     "text/csv"
 }
 # print(ALLOWED_TYPES)

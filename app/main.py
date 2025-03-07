@@ -154,11 +154,11 @@ async def list_files():
         # Collect files from all buckets
         pdf_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "pdf"} for f in pdf_gridfs.find()]
         image_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "image"} for f in image_gridfs.find()]
-        json_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "image"} for f in json_gridfs.find()]
+        json_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "json"} for f in json_gridfs.find()]
         other_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "other"} for f in other_gridfs.find()]
-        word_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "other"} for f in word_gridfs.find()]
-        text_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "other"} for f in text_gridfs.find()]
-        csv_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "other"} for f in csv_gridfs.find()]
+        word_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "word"} for f in word_gridfs.find()]
+        text_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "text"} for f in text_gridfs.find()]
+        csv_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "csv"} for f in csv_gridfs.find()]
         
         file_list = pdf_files + image_files + json_files + other_files + word_files + text_files + csv_files
         logger.info(f"Listed {len(file_list)} files")
@@ -204,23 +204,39 @@ async def search_pdf_by_word(word: str):
     
     return {"matched_pdfs": matched_files}
 
-
-# Get a file (download/stream)
+# Get a file (download/stream or view inline)
 @app.get("/file/{file_id}/{bucket}")
-async def get_file(file_id: str, bucket: str):
+async def get_file(file_id: str, bucket: str, inline: bool = False):
     try:
+        logger.info(f"Request received - File ID: {file_id}, Bucket: {bucket}, Inline: {inline}")
         gridfs_bucket = bucket_gridfs_dict[bucket]
         file_data = gridfs_bucket.get(ObjectId(file_id))
         logger.info(f"Streaming file: {file_data.filename}, ID: {file_id}, Bucket: {bucket}")
+
+        # If inline=True and bucket is "word", return extracted text
+        if inline and bucket == "word":
+            logger.info(f"Attempting to fetch word content for file_id: {file_id}")
+            content_doc = db.wordContent.find_one({"file_id": ObjectId(file_id)})
+            if not content_doc:
+                logger.error(f"No word content found for file_id: {file_id}")
+                raise HTTPException(status_code=404, detail="Word content not found")
+            logger.info(f"Word content retrieved: {content_doc['filename']}")
+            return {"filename": content_doc["filename"], "content": content_doc["content"]}
+
+        # Otherwise, stream the raw file
+        disposition = "inline" if inline else "attachment"
+        logger.info(f"Streaming raw file with disposition: {disposition}")
         return StreamingResponse(
             io.BytesIO(file_data.read()),
             media_type=file_data.content_type,
-            headers={"Content-Disposition": f"attachment; filename={file_data.filename}"}
+            headers={"Content-Disposition": f"{disposition}; filename={file_data.filename}"}
         )
-    except Exception:
-        logger.error(f"File not found: {file_id} in bucket {bucket}")
+    except HTTPException as e:
+        raise e  # Re-raise HTTP exceptions as-is
+    except Exception as e:
+        logger.error(f"Error processing request: {str(e)}, File ID: {file_id}, Bucket: {bucket}")
         raise HTTPException(status_code=404, detail="File not found")
-
+    
 # Update a file
 @app.put("/file/{file_id}/{bucket}")
 async def update_file(file_id: str, bucket: str, file: UploadFile = File(...)):
