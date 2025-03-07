@@ -74,6 +74,11 @@ def detect_encoding(file_bytes):
     result = chardet.detect(file_bytes)
     return result["encoding"]
 
+    # """Retrieve all existing filenames from GridFS."""
+# def get_existing_filenames():
+#     pdf_files = [{"filename": f.filename} for f in pdf_gridfs.find()]
+#     return pdf_files
+#     # return {file.filename for file in pdf_gridfs.find({}, {"filename": 1})}
 
 # Upload a file
 @app.post("/upload/")
@@ -87,6 +92,10 @@ async def upload_file(file: UploadFile = File(...)):
             logger.error(f"File too large: {file.size} bytes")
             raise HTTPException(status_code=400, detail="File too big (max 5MB)")
         
+        # existing_filenames = get_existing_filenames()
+        # logger.info(f"File content type: {existing_filenames}")
+        # if file.filename in existing_filenames:
+        #     raise HTTPException(status_code=400, detail="File with this name already exists!")
         
         content = await file.read()
         gridfs_bucket, bucket_name = get_gridfs_bucket(file.content_type)
