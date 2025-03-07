@@ -26,8 +26,8 @@ app = FastAPI(title="My File Upload API")
 async def root():
     return {"message": "I am alive"}
 
-# origins = ["https://cheerful-froyo-4df5ef.netlify.app"]
-origins = ["*"]
+origins = ["https://cheerful-froyo-4df5ef.netlify.app"]
+# origins = ["*"]
 
 #Bucket and Gridfs Dictionary
 bucket_gridfs_dict = {"pdf": pdf_gridfs, "image": image_gridfs, "json": json_gridfs, "other": other_gridfs, "word": word_gridfs, "text": text_gridfs, "csv": csv_gridfs}
