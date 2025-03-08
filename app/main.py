@@ -26,8 +26,8 @@ app = FastAPI(title="My File Upload API")
 async def root():
     return {"message": "I am alive"}
 
-origins = ["https://cheerful-froyo-4df5ef.netlify.app"]
-# origins = ["*"]
+# origins = ["https://cheerful-froyo-4df5ef.netlify.app"]
+origins = ["*"]
 
 #Bucket and Gridfs Dictionary
 bucket_gridfs_dict = {"pdf": pdf_gridfs, "image": image_gridfs, "json": json_gridfs, "other": other_gridfs, "word": word_gridfs, "text": text_gridfs, "csv": csv_gridfs}
@@ -149,7 +149,7 @@ async def upload_file(file: UploadFile = File(...)):
         return {"filename": file.filename, "file_id": str(file_id), "bucket": bucket_name, "message": "File uploaded!"}
     except Exception as e:
         logger.error(f"Upload error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error or ")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # Get all files (list)
 @app.get("/files/")
@@ -196,10 +196,10 @@ async def search_pdf_by_word(word: str):
     resultsCSV = db.csvContent.find({"content": {"$regex": word, "$options": "i"}})
     
     matched_file_PDF = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsPDF]
-    matched_file_Word = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsWord]
-    matched_file_Txt = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsTxt]
-    matched_file_JSON = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsJSON]
-    matched_file_CSV = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsCSV]
+    matched_file_Word = [{"filename": doc["filename"], "word_id": str(doc["file_id"])} for doc in resultsWord]
+    matched_file_Txt = [{"filename": doc["filename"], "text_id": str(doc["file_id"])} for doc in resultsTxt]
+    matched_file_JSON = [{"filename": doc["filename"], "json_id": str(doc["file_id"])} for doc in resultsJSON]
+    matched_file_CSV = [{"filename": doc["filename"], "csv_id": str(doc["file_id"])} for doc in resultsCSV]
     
     matched_files = matched_file_PDF + matched_file_Word + matched_file_Txt + matched_file_JSON + matched_file_CSV
     
@@ -269,6 +269,13 @@ async def delete_file(file_id: str, bucket: str):
     try:
         gridfs_bucket = bucket_gridfs_dict[bucket]
         gridfs_bucket.delete(ObjectId(file_id))
+        # # if gridfs_bucket == "pdf":
+        # result = db.gridfs_bucket.find({"_id": {"$regex": ObjectId(file_id), "$options": "i"}})
+        # matched_file = [{"id": doc["_id"], "filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in result]
+        
+        # for file in matched_file["matched_pdfs"]:
+        #     if file["_id"] == ObjectId(file_id):
+        #         logger.info(f"File content type: {file["_id"]}")
         logger.info(f"Deleted file ID: {file_id}, Bucket: {bucket}")
         return {"message": "File deleted!"}
     except Exception:
