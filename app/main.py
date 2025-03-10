@@ -8,11 +8,11 @@ import io
 import logging
 import json
 from io import BytesIO
-import PyPDF2 
-from docx import Document 
+import PyPDF2 #PDF to text
+from docx import Document  #Word to text
 from motor.motor_asyncio import AsyncIOMotorClient  
-import pandas as pd
-import chardet 
+import pandas as pd #CSV to text
+import chardet #Detect encoder
 from typing import Literal
 from datetime import datetime, timedelta
 
@@ -327,7 +327,31 @@ async def get_file(file_id: str, bucket: str, inline: bool = False):
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}, File ID: {file_id}, Bucket: {bucket}")
         raise HTTPException(status_code=404, detail="File not found")
-    
+
+
+# Top Dowloaded File Show 
+collections = ["pdf", "image", "json", "word", "text", "csv", "other"]
+@app.get("/top-downloads")
+async def top_download_files(numbers: int = Query(5)):
+    all_files = []
+
+    for collection_name in collections:
+        collection = db[f"{collection_name}.files"]
+        cursor = collection.find().sort("downloadsCount", -1).limit(10)
+
+        for file in cursor:
+            all_files.append({
+                "file_id": str(file["_id"]),
+                "filename": file.get("filename"),
+                "downloadsCount": file.get("downloadsCount", 0),
+                "upload_date": file.get("uploadDate"),
+                "collection": collection_name
+            })
+    # Sort all files combined
+    sorted_files = sorted(all_files, key=lambda x: x["downloadsCount"], reverse=True)
+    # Return top 5 overall
+    return {"top_downloaded_files": sorted_files[:numbers]}
+
 # Update a file
 @app.put("/file/{file_id}/{bucket}")
 async def update_file(file_id: str, bucket: str, file: UploadFile = File(...)):
