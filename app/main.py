@@ -99,11 +99,11 @@ async def upload_file(file: UploadFile = File(...)):
         gridfs_bucket, bucket_name, content_collection = get_gridfs_bucket(file.content_type)
 
         # Check if a file with the same name already exists in the bucket
-        # existing_file = gridfs_bucket.find_one({"filename": file.filename})
-        # if existing_file:
-        #     logger.error(f"File already exists: {file.filename}")
-        #     # return {"Message":"File with the same name already exists"}
-        #     raise HTTPException(status_code=400, detail="File with the same name already exists")
+        existing_file = gridfs_bucket.find_one({"filename": file.filename})
+        if existing_file:
+            logger.error(f"File already exists: {file.filename}")
+            # return {"Message":"File with the same name already exists"}
+            raise HTTPException(status_code=400, detail="File with the same name already exists")
             
 
         file_id = gridfs_bucket.put(content, filename=file.filename, content_type=file.content_type)
