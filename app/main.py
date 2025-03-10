@@ -106,7 +106,7 @@ async def upload_file(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="File with the same name already exists")
             
 
-        file_id = gridfs_bucket.put(content, filename=file.filename, content_type=file.content_type, downloadsCount= 0)
+        file_id = gridfs_bucket.put(content, filename=file.filename, content_type=file.content_type, downloadsCount= 0, viewsCount=0)
         logger.info(f"Uploaded file: {file.filename}, ID: {file_id}, Bucket: {bucket_name}")
 
         # Extract Text
@@ -247,13 +247,6 @@ async def get_file(file_id: str, bucket: str, inline: bool = False):
         file_data = gridfs_bucket.get(ObjectId(file_id))
         logger.info(f"Streaming file: {file_data.filename}, ID: {file_id}, Bucket: {bucket}")
 
-        # Increment the download count for the file
-        db[f"{bucket}.files"].update_one(
-            {"_id": ObjectId(file_id)},
-            {"$inc": {"downloadsCount": 1}},
-            upsert=True
-        )
-        logger.info(f"Download count for file_id {file_id} incremented.")
 
         # If inline=True and bucket is "word", return extracted text
         if inline and bucket == "word":
@@ -263,7 +256,7 @@ async def get_file(file_id: str, bucket: str, inline: bool = False):
                 logger.error(f"No word content found for file_id: {file_id}")
                 raise HTTPException(status_code=404, detail="Word content not found")
             logger.info(f"Word content retrieved: {content_doc['filename']}")
-            return {"filename": content_doc["filename"], "content": content_doc["content"]}
+            # return {"filename": content_doc["filename"], "content": content_doc["content"]}
         
         if inline and bucket == "pdf":
             logger.info(f"Attempting to fetch pdf content for file_id: {file_id}")
@@ -272,7 +265,7 @@ async def get_file(file_id: str, bucket: str, inline: bool = False):
                 logger.error(f"No Pdf content found for file_id: {file_id}")
                 raise HTTPException(status_code=404, detail="Word content not found")
             logger.info(f"Pdf content retrieved: {content_doc['filename']}")
-            return {"filename": content_doc["filename"], "content": content_doc["content"]}
+            # return {"filename": content_doc["filename"], "content": content_doc["content"]}
         
         if inline and bucket == "csv":
             logger.info(f"Attempting to fetch word content for file_id: {file_id}")
@@ -281,13 +274,29 @@ async def get_file(file_id: str, bucket: str, inline: bool = False):
                 logger.error(f"No CSV content found for file_id: {file_id}")
                 raise HTTPException(status_code=404, detail="Word content not found")
             logger.info(f"CSV content retrieved: {content_doc['filename']}")
-            return {"filename": content_doc["filename"], "content": content_doc["content"]}
+            # return {"filename": content_doc["filename"], "content": content_doc["content"]}
         
+        # Increment the download count for the file
+        if inline == False:
+            db[f"{bucket}.files"].update_one(
+                {"_id": ObjectId(file_id)},
+                {"$inc": {"downloadsCount": 1}},
+                upsert=True
+            )
+            logger.info(f"Download count for file_id {file_id} incremented.")
+        else:
+            db[f"{bucket}.files"].update_one(
+                {"_id": ObjectId(file_id)},
+                {"$inc": {"viewsCount": 1}},
+                upsert=True
+            )
+            logger.info(f"View count for file_id {file_id} incremented.")
 
 
         # Otherwise, stream the raw file
         disposition = "inline" if inline else "attachment"
         logger.info(f"Streaming raw file with disposition: {disposition}")
+
         return StreamingResponse(
             io.BytesIO(file_data.read()),
             media_type=file_data.content_type,
@@ -339,7 +348,7 @@ async def update_file(file_id: str, bucket: str, file: UploadFile = File(...)):
             # gridfs_bucket.delete(ObjectId(file_id))
             # content = await file.read()
             content = await file.read()
-            new_file_id = gridfs_bucket.put(content, filename=file.filename, content_type=file.content_type, _id=ObjectId(file_id))
+            new_file_id = gridfs_bucket.put(content, filename=file.filename, content_type=file.content_type, _id=ObjectId(file_id), downloadsCount= 0, viewsCount=0)
             logger.info(f"Updated file: {file.filename}, ID: {new_file_id}, Bucket: {bucket}")
 
 
