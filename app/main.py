@@ -14,6 +14,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import pandas as pd
 import chardet 
 from typing import Literal
+from datetime import datetime, timedelta
 
 
 # Set up logging
@@ -82,6 +83,11 @@ def get_gridfs_files_collection(section_name: str):
 def get_gridfs_files_and_contrnt_collection(section_name: str):
     """Returns the GridFS files collection dynamically based on section name."""
     return db[f"{section_name}.files"], db[f"{section_name}Content"]
+
+# Helper function to convert UTC to Bangladesh Time and format it
+def format_bangladesh_time(upload_time):
+    bd_time = upload_time + timedelta(hours=6)
+    return bd_time.strftime("%d/%m/%Y, %I:%M %p")
 
 # Upload a file
 @app.post("/upload/")
@@ -186,6 +192,10 @@ async def list_files(sort_by: Literal["upload_time", "filename"] = Query("upload
             file_list.sort(key=lambda x: x["upload_time"], reverse=sort_reverse)
         # file_list.sort(key=lambda x: x[sort_by], reverse= sort_reverse)
 
+        # Format the upload_time to Bangladesh time for each file
+        for file in file_list:
+            file["upload_time"] = format_bangladesh_time(file["upload_time"])
+            
         logger.info(f"Listed {len(file_list)} files")
         return {"files": file_list}
     except Exception as e:
