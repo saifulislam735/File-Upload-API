@@ -83,6 +83,17 @@ def get_gridfs_files_and_contrnt_collection(section_name: str):
     """Returns the GridFS files collection dynamically based on section name."""
     return db[f"{section_name}.files"], db[f"{section_name}Content"]
 
+#View Count
+def countView(bucket: str, file_id: str, inline: bool):
+    # Increment the download count for the file
+        if inline == True:
+            db[f"{bucket}.files"].update_one(
+                {"_id": ObjectId(file_id)},
+                {"$inc": {"viewsCount": 1}},
+                upsert=True
+            )
+            logger.info(f"View count for file_id {file_id} incremented.")
+
 # Upload a file
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
@@ -256,7 +267,8 @@ async def get_file(file_id: str, bucket: str, inline: bool = False):
                 logger.error(f"No word content found for file_id: {file_id}")
                 raise HTTPException(status_code=404, detail="Word content not found")
             logger.info(f"Word content retrieved: {content_doc['filename']}")
-            # return {"filename": content_doc["filename"], "content": content_doc["content"]}
+            countView(bucket=bucket, file_id=file_id, inline=inline)
+            return {"filename": content_doc["filename"], "content": content_doc["content"]}
         
         if inline and bucket == "pdf":
             logger.info(f"Attempting to fetch pdf content for file_id: {file_id}")
@@ -265,7 +277,8 @@ async def get_file(file_id: str, bucket: str, inline: bool = False):
                 logger.error(f"No Pdf content found for file_id: {file_id}")
                 raise HTTPException(status_code=404, detail="Word content not found")
             logger.info(f"Pdf content retrieved: {content_doc['filename']}")
-            # return {"filename": content_doc["filename"], "content": content_doc["content"]}
+            countView(bucket=bucket, file_id=file_id, inline=inline)
+            return {"filename": content_doc["filename"], "content": content_doc["content"]}
         
         if inline and bucket == "csv":
             logger.info(f"Attempting to fetch word content for file_id: {file_id}")
@@ -274,8 +287,11 @@ async def get_file(file_id: str, bucket: str, inline: bool = False):
                 logger.error(f"No CSV content found for file_id: {file_id}")
                 raise HTTPException(status_code=404, detail="Word content not found")
             logger.info(f"CSV content retrieved: {content_doc['filename']}")
-            # return {"filename": content_doc["filename"], "content": content_doc["content"]}
+            countView(bucket=bucket, file_id=file_id, inline=inline)
+            return {"filename": content_doc["filename"], "content": content_doc["content"]}
         
+        
+        countView(bucket=bucket, file_id=file_id, inline=inline)
         # Increment the download count for the file
         if inline == False:
             db[f"{bucket}.files"].update_one(
@@ -284,13 +300,6 @@ async def get_file(file_id: str, bucket: str, inline: bool = False):
                 upsert=True
             )
             logger.info(f"Download count for file_id {file_id} incremented.")
-        else:
-            db[f"{bucket}.files"].update_one(
-                {"_id": ObjectId(file_id)},
-                {"$inc": {"viewsCount": 1}},
-                upsert=True
-            )
-            logger.info(f"View count for file_id {file_id} incremented.")
 
 
         # Otherwise, stream the raw file
