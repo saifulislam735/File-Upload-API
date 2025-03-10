@@ -106,7 +106,7 @@ async def upload_file(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="File with the same name already exists")
             
 
-        file_id = gridfs_bucket.put(content, filename=file.filename, content_type=file.content_type)
+        file_id = gridfs_bucket.put(content, filename=file.filename, content_type=file.content_type, downloadsCount= 0)
         logger.info(f"Uploaded file: {file.filename}, ID: {file_id}, Bucket: {bucket_name}")
 
         # Extract Text
@@ -246,6 +246,14 @@ async def get_file(file_id: str, bucket: str, inline: bool = False):
         gridfs_bucket = bucket_gridfs_dict[bucket]
         file_data = gridfs_bucket.get(ObjectId(file_id))
         logger.info(f"Streaming file: {file_data.filename}, ID: {file_id}, Bucket: {bucket}")
+
+        # Increment the download count for the file
+        db[f"{bucket}.files"].update_one(
+            {"_id": ObjectId(file_id)},
+            {"$inc": {"downloadsCount": 1}},
+            upsert=True
+        )
+        logger.info(f"Download count for file_id {file_id} incremented.")
 
         # If inline=True and bucket is "word", return extracted text
         if inline and bucket == "word":
