@@ -44,19 +44,19 @@ app.add_middleware(
 # Helper function to choose the GridFS bucket based on content_type
 def get_gridfs_bucket(content_type):
     if content_type == "application/pdf":
-        return pdf_gridfs, "pdf"
+        return pdf_gridfs, "pdf", db.pdfContent
     elif content_type in {"image/jpeg", "image/png"}:
-        return image_gridfs, "image"
+        return image_gridfs, "image", None
     elif content_type in {"application/json"}:
-        return json_gridfs, "json"
+        return json_gridfs, "json", db.jsonContent
     elif content_type in {"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"}:
-        return word_gridfs, "word"
+        return word_gridfs, "word", db.wordContent
     elif content_type in {"text/plain"}:
-        return text_gridfs, "text"
+        return text_gridfs, "text", db.textContent
     elif content_type in {"text/csv"}:
-        return csv_gridfs, "csv"
+        return csv_gridfs, "csv", db.csvContent
     else:
-        return other_gridfs, "other"
+        return other_gridfs, "other", None
 
 # Function to extract text from PDF
 def extract_text_from_pdf(file_bytes):
@@ -74,6 +74,14 @@ def detect_encoding(file_bytes):
     result = chardet.detect(file_bytes)
     return result["encoding"]
 
+def get_gridfs_files_collection(section_name: str):
+    """Returns the GridFS files collection dynamically based on section name."""
+    return db[f"{section_name}.files"]
+
+def get_gridfs_files_and_contrnt_collection(section_name: str):
+    """Returns the GridFS files collection dynamically based on section name."""
+    return db[f"{section_name}.files"], db[f"{section_name}Content"]
+
 # Upload a file
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
@@ -87,69 +95,73 @@ async def upload_file(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="File too big (max 5MB)")   
         
         content = await file.read()
-        gridfs_bucket, bucket_name = get_gridfs_bucket(file.content_type)
+        gridfs_bucket, bucket_name, content_collection = get_gridfs_bucket(file.content_type)
 
         # Check if a file with the same name already exists in the bucket
-        existing_file = gridfs_bucket.find_one({"filename": file.filename})
-        if existing_file:
-            logger.error(f"File already exists: {file.filename}")
-            raise HTTPException(status_code=400, detail="File with the same name already exists")
+        # existing_file = gridfs_bucket.find_one({"filename": file.filename})
+        # if existing_file:
+        #     logger.error(f"File already exists: {file.filename}")
+        #     # return {"Message":"File with the same name already exists"}
+        #     raise HTTPException(status_code=400, detail="File with the same name already exists")
+            
 
         file_id = gridfs_bucket.put(content, filename=file.filename, content_type=file.content_type)
         logger.info(f"Uploaded file: {file.filename}, ID: {file_id}, Bucket: {bucket_name}")
 
-        #Store pdf content
-        if bucket_name == "pdf":
-            extracted_text = extract_text_from_pdf(content)
-            db.pdfContent.insert_one({
-                "filename": file.filename,
-                "content": extracted_text,
-                "file_id": file_id
-            })
+        # Extract Text
+        if bucket_name == "pdf" or bucket_name == "word" or bucket_name == "csv" or bucket_name == "text":
+            #Store pdf content
+            if bucket_name == "pdf":
+                extracted_text = extract_text_from_pdf(content)
 
-        #Store word content
-        if bucket_name == "word":
-            text = extract_text_from_docx(content)
-            db.wordContent.insert_one({
-                "filename": file.filename, 
-                "content": text,
-                "file_id": file_id
-            })
+            #Store word content
+            if bucket_name == "word":
+                extracted_text = extract_text_from_docx(content)
 
-        #Store txt content
-        if bucket_name == "text":
-            text_data = content.decode("utf-8")
-            db.txtContent.insert_one({
-                "filename": file.filename, 
-                "content": text_data,
-                "file_id": file_id
-            })
+            #Store txt content
+            if bucket_name == "text":
+                extracted_text = content.decode("utf-8")
+            
+            #Store CSV content
+            if bucket_name == "csv":
+                encoding = detect_encoding(content)
+                df = pd.read_csv(io.BytesIO(content), dtype=str, encoding=encoding, header=None)
+                extracted_text = "\n".join(df.astype(str).apply(lambda x: ", ".join(x), axis=1))
 
-        #Store JSON as JSON and content
-        if bucket_name == "json":
+            contentID = content_collection.insert_one({
+                    "filename": file.filename,
+                    "content": extracted_text,
+                    "file_id": file_id
+                }).inserted_id
+            files_collection = get_gridfs_files_collection(bucket_name)
+            files_collection.update_one(
+                    {"_id": ObjectId(file_id)}, # Filter condition
+                    {"$set": {"content_id": ObjectId(contentID)}}  # Correct use of $set
+                )
+            return {"filename": file.filename, "file_id": str(file_id), "content_id": str(contentID), "bucket": bucket_name, "message": "File and Content uploaded!"}
+        
+        elif bucket_name == "json":
             json_data = json.load(BytesIO(content))
-            db.jsonContent.insert_one({
+            extracted_text = content.decode("utf-8")
+            contentID = content_collection.insert_one({
                 "filename": file.filename,
                 "json_object": json_data,
-                "content": content.decode("utf-8"),
+                "content": extracted_text,
                 "file_id": file_id
-            })
-        
-        #Store CSV content
-        if bucket_name == "csv":
-            encoding = detect_encoding(content)
-            df = pd.read_csv(io.BytesIO(content), dtype=str, encoding=encoding, header=None)
-            text_content = "\n".join(df.astype(str).apply(lambda x: ", ".join(x), axis=1))
-            db.csvContent.insert_one({
-                "filename": file.filename,
-                "content": text_content,
-                "file_id": file_id
-            })
+            }).inserted_id
 
-        return {"filename": file.filename, "file_id": str(file_id), "bucket": bucket_name, "message": "File uploaded!"}
+            files_collection = get_gridfs_files_collection(bucket_name)
+            files_collection.update_one(
+                    {"_id": ObjectId(file_id)}, # Filter condition
+                    {"$set": {"content_id": ObjectId(contentID)}}  # Correct use of $set
+                )
+            return {"filename": file.filename, "file_id": str(file_id), "content_id": str(contentID), "bucket": bucket_name, "message": "File and Content uploaded!"}
+        
+        else:
+            return {"filename": file.filename, "file_id": str(file_id), "bucket": bucket_name, "message": "File uploaded!"}
     except Exception as e:
         logger.error(f"Upload error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error from upload")
 
 # Get all files (list)
 @app.get("/files/")
@@ -252,13 +264,97 @@ async def update_file(file_id: str, bucket: str, file: UploadFile = File(...)):
             logger.error(f"File too large for update: {file.size} bytes")
             raise HTTPException(status_code=400, detail="File too big (max 5MB)")
         
-        gridfs_bucket = bucket_gridfs_dict[bucket]
-        gridfs_bucket.delete(ObjectId(file_id))
-        content = await file.read()
-        new_file_id = gridfs_bucket.put(content, filename=file.filename, content_type=file.content_type, _id=ObjectId(file_id))
-        logger.info(f"Updated file: {file.filename}, ID: {new_file_id}, Bucket: {bucket}")
         
-        return {"filename": file.filename, "file_id": str(new_file_id), "bucket": bucket, "message": "File updated!"}
+        gridfs_bucket1, bucket_name, content_collection = get_gridfs_bucket(file.content_type)
+
+        gridfs_bucket = bucket_gridfs_dict[bucket]
+        if bucket_name == bucket:
+            file_object_id = ObjectId(file_id)
+            if bucket == "pdf" or bucket == "word" or  bucket == "json" or bucket == "csv" or bucket == "text":
+                files_collection, content_collection = get_gridfs_files_and_contrnt_collection(bucket)
+                file_data = files_collection.find_one({"_id": file_object_id})
+                if not file_data:
+                    logger.info("File not found in GridFS")
+                    raise HTTPException(status_code=404, detail="File not found in GridFS")       
+                document = content_collection.find_one({"file_id": file_object_id})
+                if not document:
+                    logger.info("Document not fount")
+                    raise HTTPException(status_code=404, detail="Document referencing file not found")
+                gridfs_bucket.delete(file_object_id)
+                content_collection.delete_one({"_id": document["_id"]})
+                logger.info("File and related document deleted successfully")
+                # return {"message": "File and related document deleted successfully"}
+            else:
+                gridfs_bucket.delete(ObjectId(file_id))
+                logger.info(f"Deleted file ID: {file_id}, Bucket: {bucket}")
+                logger.info("File deleted!")
+                # return {"message": "File deleted!"}
+
+            # gridfs_bucket.delete(ObjectId(file_id))
+            # content = await file.read()
+            content = await file.read()
+            new_file_id = gridfs_bucket.put(content, filename=file.filename, content_type=file.content_type, _id=ObjectId(file_id))
+            logger.info(f"Updated file: {file.filename}, ID: {new_file_id}, Bucket: {bucket}")
+
+
+            # Extract Text
+            if bucket_name == "pdf" or bucket_name == "word" or bucket_name == "csv" or bucket_name == "text":
+                #Store pdf content
+                if bucket_name == "pdf":
+                    extracted_text = extract_text_from_pdf(content)
+
+                #Store word content
+                if bucket_name == "word":
+                    extracted_text = extract_text_from_docx(content)
+
+                #Store txt content
+                if bucket_name == "text":
+                    extracted_text = content.decode("utf-8")
+                
+                #Store CSV content
+                if bucket_name == "csv":
+                    encoding = detect_encoding(content)
+                    df = pd.read_csv(io.BytesIO(content), dtype=str, encoding=encoding, header=None)
+                    extracted_text = "\n".join(df.astype(str).apply(lambda x: ", ".join(x), axis=1))
+
+                new_contentID = content_collection.insert_one({
+                        "filename": file.filename,
+                        "content": extracted_text,
+                        "file_id": ObjectId(file_id),
+                        "_id": ObjectId(document["_id"])
+                    }).inserted_id
+                files_collection = get_gridfs_files_collection(bucket_name)
+                files_collection.update_one(
+                        {"_id": ObjectId(file_id)}, # Filter condition
+                        {"$set": {"content_id": ObjectId(new_contentID)}}  # Correct use of $set
+                    )
+                logger.info("File and Content updated!")
+                return {"filename": file.filename, "file_id": str(file_id), "content_id": str(new_contentID), "bucket": bucket_name, "message": "File and Content updated!"}
+            
+            elif bucket_name == "json":
+                json_data = json.load(BytesIO(content))
+                extracted_text = content.decode("utf-8")
+                new_contentID = content_collection.insert_one({
+                    "filename": file.filename,
+                    "json_object": json_data,
+                    "content": extracted_text,
+                    "file_id": ObjectId(file_id),
+                    "_id": ObjectId(document["_id"])
+                }).inserted_id
+
+                files_collection = get_gridfs_files_collection(bucket_name)
+                files_collection.update_one(
+                        {"_id": ObjectId(file_id)}, # Filter condition
+                        {"$set": {"content_id": ObjectId(new_contentID)}}  # Correct use of $set
+                    )
+                return {"filename": file.filename, "file_id": str(file_id), "content_id": str(new_contentID), "bucket": bucket_name, "message": "File and Content updated!"}
+            
+            else:
+                return {"filename": file.filename, "file_id": str(new_file_id), "bucket": bucket_name, "message": "File updated!"}
+        else:
+            return {"Message": "Please upload same file type!!"}
+        
+        # return {"filename": file.filename, "file_id": str(new_file_id), "bucket": bucket, "message": "File updated!"}
     except Exception as e:
         logger.error(f"Update error: {str(e)}")
         raise HTTPException(status_code=404, detail="File not found")
@@ -268,16 +364,58 @@ async def update_file(file_id: str, bucket: str, file: UploadFile = File(...)):
 async def delete_file(file_id: str, bucket: str):
     try:
         gridfs_bucket = bucket_gridfs_dict[bucket]
-        gridfs_bucket.delete(ObjectId(file_id))
-        # # if gridfs_bucket == "pdf":
-        # result = db.gridfs_bucket.find({"_id": {"$regex": ObjectId(file_id), "$options": "i"}})
-        # matched_file = [{"id": doc["_id"], "filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in result]
+        file_object_id = ObjectId(file_id)
+        if bucket == "pdf" or bucket == "word" or  bucket == "json" or bucket == "csv" or bucket == "text":
+            # if bucket == "pdf":
+            #     files_collection = db.pdf.files
+            #     content_collection = db.pdfContent
+            # elif bucket == "word":
+            #     files_collection = db.word.files
+            #     content_collection = db.wordContent
+            # elif bucket == "json":
+            #     files_collection = db.json.files
+            #     content_collection = db.jsonContent
+            # elif bucket == "csv":
+            #     files_collection = db.csv.files
+            #     content_collection = db.csvContent
+            # elif bucket == "text":
+            #     files_collection = db.text.files
+            #     content_collection = db.textContent
+            # else:
+            #     raise HTTPException(status_code=400, detail="Invalid bucket")
+
+            files_collection, content_collection = get_gridfs_files_and_contrnt_collection(bucket)
+            # Find the file in the GridFS files collection
+            file_data = files_collection.find_one({"_id": file_object_id})
+            if not file_data:
+                logger.info("File not found in GridFS")
+                raise HTTPException(status_code=404, detail="File not found in GridFS")       
+            # Find the related document in the other collection that references this file
+            document = content_collection.find_one({"file_id": file_object_id})
+            if not document:
+                logger.info("Document not fount")
+                raise HTTPException(status_code=404, detail="Document referencing file not found")
+            # Delete the file from GridFS
+            gridfs_bucket.delete(file_object_id)
+            # Delete the document from the other collection
+            content_collection.delete_one({"_id": document["_id"]})
+
+            return {"message": "File and related document deleted successfully"}
+        else:
+            gridfs_bucket.delete(ObjectId(file_id))
+            logger.info(f"Deleted file ID: {file_id}, Bucket: {bucket}")
+            return {"message": "File deleted!"}
+        # grid_out = gridfs_bucket.get(ObjectId(file_id))
+        # content_ID = grid_out.content_id
         
-        # for file in matched_file["matched_pdfs"]:
-        #     if file["_id"] == ObjectId(file_id):
-        #         logger.info(f"File content type: {file["_id"]}")
-        logger.info(f"Deleted file ID: {file_id}, Bucket: {bucket}")
-        return {"message": "File deleted!"}
+        # logger.info(f"content id: {content_ID}")
+        
+        # if bucket == "pdf":
+        #     db.pdfContent.delete(ObjectId(content_ID))
+        #     logger.info(f"Deleted Content ID: {content_ID}, Bucket: {bucket}")
+
+        # logger.info(f"Deleted file ID: {file_id}, Bucket: {bucket}")
+        # return {"message": "File deleted!"}
     except Exception:
         logger.error(f"Delete error: {file_id} in bucket {bucket}")
         raise HTTPException(status_code=404, detail="File not found")
