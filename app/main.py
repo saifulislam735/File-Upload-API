@@ -256,6 +256,26 @@ async def get_file(file_id: str, bucket: str, inline: bool = False):
                 raise HTTPException(status_code=404, detail="Word content not found")
             logger.info(f"Word content retrieved: {content_doc['filename']}")
             return {"filename": content_doc["filename"], "content": content_doc["content"]}
+        
+        if inline and bucket == "pdf":
+            logger.info(f"Attempting to fetch pdf content for file_id: {file_id}")
+            content_doc = db.pdfContent.find_one({"file_id": ObjectId(file_id)})
+            if not content_doc:
+                logger.error(f"No Pdf content found for file_id: {file_id}")
+                raise HTTPException(status_code=404, detail="Word content not found")
+            logger.info(f"Pdf content retrieved: {content_doc['filename']}")
+            return {"filename": content_doc["filename"], "content": content_doc["content"]}
+        
+        if inline and bucket == "csv":
+            logger.info(f"Attempting to fetch word content for file_id: {file_id}")
+            content_doc = db.csvContent.find_one({"file_id": ObjectId(file_id)})
+            if not content_doc:
+                logger.error(f"No CSV content found for file_id: {file_id}")
+                raise HTTPException(status_code=404, detail="Word content not found")
+            logger.info(f"CSV content retrieved: {content_doc['filename']}")
+            return {"filename": content_doc["filename"], "content": content_doc["content"]}
+        
+
 
         # Otherwise, stream the raw file
         disposition = "inline" if inline else "attachment"
