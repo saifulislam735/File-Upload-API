@@ -95,6 +95,12 @@ def countView(bucket: str, file_id: str, inline: bool):
             )
             logger.info(f"View count for file_id {file_id} incremented.")
 
+# Helper function to convert UTC to Bangladesh Time and format it
+def format_bangladesh_time(upload_time):
+    bd_time = upload_time + timedelta(hours=6)
+    return bd_time.strftime("%d/%m/%Y, %I:%M %p")
+
+
 # Upload a file
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
@@ -181,13 +187,13 @@ async def upload_file(file: UploadFile = File(...)):
 async def list_files(sort_by: Literal["upload_time", "filename"] = Query("upload_time"), order: Literal["asc", "desc"] = Query("desc")):
     try:
         # Collect files from all buckets
-        pdf_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "pdf", "upload_time": f.uploadDate} for f in pdf_gridfs.find()]
-        image_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "image", "upload_time": f.uploadDate} for f in image_gridfs.find()]
-        json_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "json", "upload_time": f.uploadDate} for f in json_gridfs.find()]
-        other_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "other", "upload_time": f.uploadDate} for f in other_gridfs.find()]
-        word_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "word", "upload_time": f.uploadDate} for f in word_gridfs.find()]
-        text_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "text", "upload_time": f.uploadDate} for f in text_gridfs.find()]
-        csv_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "csv", "upload_time": f.uploadDate} for f in csv_gridfs.find()]
+        pdf_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "pdf", "upload_time": f.uploadDate, "downloadsCount":f.downloadsCount ,"views_Count":f.viewsCount} for f in pdf_gridfs.find()]
+        image_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "image", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCountm,"views_Count":f.viewsCount} for f in image_gridfs.find()]
+        json_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "json", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCount,"views_Count":f.viewsCount} for f in json_gridfs.find()]
+        other_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "other", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCount,"views_Count":f.viewsCount} for f in other_gridfs.find()]
+        word_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "word", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCount,"views_Count":f.viewsCount} for f in word_gridfs.find()]
+        text_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "text", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCount,"views_Count":f.viewsCount} for f in text_gridfs.find()]
+        csv_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "csv", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCount,"views_Count":f.viewsCount} for f in csv_gridfs.find()]
         
         file_list = pdf_files + image_files + json_files + other_files + word_files + text_files + csv_files
 
@@ -201,7 +207,7 @@ async def list_files(sort_by: Literal["upload_time", "filename"] = Query("upload
         # Format the upload_time to Bangladesh time for each file
         for file in file_list:
             file["upload_time"] = format_bangladesh_time(file["upload_time"])
-            
+                        
         logger.info(f"Listed {len(file_list)} files")
         return {"files": file_list}
     except Exception as e:
