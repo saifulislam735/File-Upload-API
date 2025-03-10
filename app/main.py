@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException 
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query 
 from fastapi.responses import StreamingResponse, JSONResponse 
 from fastapi.middleware.cors import CORSMiddleware
 from app.db import db, pdf_gridfs, image_gridfs, json_gridfs, other_gridfs, word_gridfs, text_gridfs, csv_gridfs  # Import all buckets
@@ -13,6 +13,7 @@ from docx import Document
 from motor.motor_asyncio import AsyncIOMotorClient  
 import pandas as pd
 import chardet 
+from typing import Literal
 
 
 # Set up logging
@@ -165,18 +166,26 @@ async def upload_file(file: UploadFile = File(...)):
 
 # Get all files (list)
 @app.get("/files/")
-async def list_files():
+async def list_files(sort_by: Literal["upload_time", "filename"] = Query("upload_time"), order: Literal["asc", "desc"] = Query("desc")):
     try:
         # Collect files from all buckets
-        pdf_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "pdf"} for f in pdf_gridfs.find()]
-        image_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "image"} for f in image_gridfs.find()]
-        json_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "json"} for f in json_gridfs.find()]
-        other_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "other"} for f in other_gridfs.find()]
-        word_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "word"} for f in word_gridfs.find()]
-        text_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "text"} for f in text_gridfs.find()]
-        csv_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "csv"} for f in csv_gridfs.find()]
+        pdf_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "pdf", "upload_time": f.uploadDate} for f in pdf_gridfs.find()]
+        image_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "image", "upload_time": f.uploadDate} for f in image_gridfs.find()]
+        json_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "json", "upload_time": f.uploadDate} for f in json_gridfs.find()]
+        other_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "other", "upload_time": f.uploadDate} for f in other_gridfs.find()]
+        word_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "word", "upload_time": f.uploadDate} for f in word_gridfs.find()]
+        text_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "text", "upload_time": f.uploadDate} for f in text_gridfs.find()]
+        csv_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "csv", "upload_time": f.uploadDate} for f in csv_gridfs.find()]
         
         file_list = pdf_files + image_files + json_files + other_files + word_files + text_files + csv_files
+
+        sort_reverse = order == "desc"
+        if sort_by == "filename":
+            file_list.sort(key=lambda x: x["filename"].lower(), reverse=sort_reverse)
+        else:
+            file_list.sort(key=lambda x: x["upload_time"], reverse=sort_reverse)
+        # file_list.sort(key=lambda x: x[sort_by], reverse= sort_reverse)
+
         logger.info(f"Listed {len(file_list)} files")
         return {"files": file_list}
     except Exception as e:
@@ -186,11 +195,19 @@ async def list_files():
 
 # Get file for specific file type
 @app.get("/file/{bucket}")
-async def get_files_in_type(bucket: str):
+async def get_files_in_type(bucket: str, sort_by: Literal["upload_time", "filename"] = Query("upload_time"), order: Literal["asc", "desc"] = Query("desc")):
     try:
         gridfs_bucket = bucket_gridfs_dict[bucket]
-        files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": bucket} for f in gridfs_bucket.find()]
+        sort_direction = 1 if order == "asc" else -1
+        files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": bucket, "upload_time": f.uploadDate} for f in gridfs_bucket.find()]
         # file_data = gridfs_bucket.get(ObjectId(file_id))
+
+        sort_reverse = order == "desc"
+        if sort_by == "filename":
+            files.sort(key=lambda x: x["filename"].lower(), reverse=sort_reverse)
+        else:
+            files.sort(key=lambda x: x["upload_time"], reverse=sort_reverse)
+
         logger.info(f"Listed {len(files)} files")
         return {"files": files}
     except Exception as e:
@@ -216,6 +233,7 @@ async def search_pdf_by_word(word: str):
     matched_files = matched_file_PDF + matched_file_Word + matched_file_Txt + matched_file_JSON + matched_file_CSV
     
     if not matched_files:
+        # matched_files = []
         raise HTTPException(status_code=404, detail="No matching PDFs found")
     
     return {"matched_pdfs": matched_files}
