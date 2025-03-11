@@ -408,6 +408,7 @@ async def top_download_files(numbers: int = Query(5)):
                 "upload_time": file.get("uploadDate"),
                 "collection": collection_name,
                 "views_Count": file.get("viewsCount"),
+                "bucket":file.get("contentType")
             })
     # Sort all files combined
     sorted_files = sorted(all_files, key=lambda x: x["downloadsCount"], reverse=True)
