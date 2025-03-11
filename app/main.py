@@ -109,9 +109,9 @@ async def upload_file(file: UploadFile = File(...)):
         # if file.content_type not in ALLOWED_TYPES:
         #     logger.error(f"Invalid file type: {file.content_type}")
         #     raise HTTPException(status_code=400, detail="File type not allowed")
-        if file.size > MAX_FILE_SIZE:
-            logger.error(f"File too large: {file.size} bytes")
-            raise HTTPException(status_code=400, detail="File too big (max 5MB)")   
+        # if file.size > MAX_FILE_SIZE:
+        #     logger.error(f"File too large: {file.size} bytes")
+        #     raise HTTPException(status_code=400, detail="File too big (max 5MB)")   
         
         content = await file.read()
         gridfs_bucket, bucket_name, content_collection = get_gridfs_bucket(file.content_type)
@@ -260,19 +260,66 @@ async def search_pdf_by_word(word: str):
     resultsJSON = db.jsonContent.find({"content": {"$regex": word, "$options": "i"}})
     resultsCSV = db.csvContent.find({"content": {"$regex": word, "$options": "i"}})
     
-    matched_file_PDF = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsPDF]
-    matched_file_Word = [{"filename": doc["filename"], "word_id": str(doc["file_id"])} for doc in resultsWord]
-    matched_file_Txt = [{"filename": doc["filename"], "text_id": str(doc["file_id"])} for doc in resultsTxt]
-    matched_file_JSON = [{"filename": doc["filename"], "json_id": str(doc["file_id"])} for doc in resultsJSON]
-    matched_file_CSV = [{"filename": doc["filename"], "csv_id": str(doc["file_id"])} for doc in resultsCSV]
+    # matched_file_PDF = [{"filename": doc["filename"], "pdf_id": str(doc["file_id"])} for doc in resultsPDF]
+    # matched_file_Word = [{"filename": doc["filename"], "word_id": str(doc["file_id"])} for doc in resultsWord]
+    # matched_file_Txt = [{"filename": doc["filename"], "text_id": str(doc["file_id"])} for doc in resultsTxt]
+    # matched_file_JSON = [{"filename": doc["filename"], "json_id": str(doc["file_id"])} for doc in resultsJSON]
+    # matched_file_CSV = [{"filename": doc["filename"], "csv_id": str(doc["file_id"])} for doc in resultsCSV]
     
-    matched_files = matched_file_PDF + matched_file_Word + matched_file_Txt + matched_file_JSON + matched_file_CSV
+    # matched_files = matched_file_PDF + matched_file_Word + matched_file_Txt + matched_file_JSON + matched_file_CSV
     
+    # if not matched_files:
+    #     # matched_files = []
+    #     raise HTTPException(status_code=404, detail="No matching PDFs found")
+    
+    # return {"matched_pdfs": matched_files}
+
+    matched_files = []
+
+    def get_file_metadata(file_id, fs_bucket, bucket_name):
+        try:
+            file_obj = fs_bucket.get(ObjectId(file_id))
+            return {
+                "file_id": str(file_id),
+                "filename": file_obj.filename,
+                "content_type": file_obj.content_type,
+                "bucket": bucket_name,
+                "upload_time": file_obj.uploadDate,
+                "downloadsCount": getattr(file_obj, 'downloadsCount', 0),
+                "views_Count": getattr(file_obj, 'viewsCount', 0)
+            }
+        except Exception:
+            return None
+
+    for doc in resultsPDF:
+        file_meta = get_file_metadata(doc["file_id"], pdf_gridfs, "pdf")
+        if file_meta:
+            matched_files.append(file_meta)
+
+    for doc in resultsWord:
+        file_meta = get_file_metadata(doc["file_id"], word_gridfs, "word")
+        if file_meta:
+            matched_files.append(file_meta)
+
+    for doc in resultsTxt:
+        file_meta = get_file_metadata(doc["file_id"], text_gridfs, "text")
+        if file_meta:
+            matched_files.append(file_meta)
+
+    for doc in resultsJSON:
+        file_meta = get_file_metadata(doc["file_id"], json_gridfs, "json")
+        if file_meta:
+            matched_files.append(file_meta)
+
+    for doc in resultsCSV:
+        file_meta = get_file_metadata(doc["file_id"], csv_gridfs, "csv")
+        if file_meta:
+            matched_files.append(file_meta)
+
     if not matched_files:
-        # matched_files = []
-        raise HTTPException(status_code=404, detail="No matching PDFs found")
-    
-    return {"matched_pdfs": matched_files}
+        raise HTTPException(status_code=404, detail="No matching files found")
+
+    return {"matched_files": matched_files}
 
 # Get a file (download/stream or view inline)
 @app.get("/file/{file_id}/{bucket}")
