@@ -345,7 +345,7 @@ async def get_file(file_id: str, bucket: str, inline: bool = False):
 
 # Top Dowloaded File Show 
 collections = ["pdf", "image", "json", "word", "text", "csv", "other"]
-@app.get("/top-downloads")
+@app.get("/top-downloads/")
 async def top_download_files(numbers: int = Query(5)):
     all_files = []
 
@@ -358,8 +358,9 @@ async def top_download_files(numbers: int = Query(5)):
                 "file_id": str(file["_id"]),
                 "filename": file.get("filename"),
                 "downloadsCount": file.get("downloadsCount", 0),
-                "upload_date": file.get("uploadDate"),
-                "collection": collection_name
+                "upload_time": file.get("uploadDate"),
+                "collection": collection_name,
+                "views_Count": file.get("viewsCount"),
             })
     # Sort all files combined
     sorted_files = sorted(all_files, key=lambda x: x["downloadsCount"], reverse=True)
