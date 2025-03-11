@@ -186,14 +186,28 @@ async def upload_file(file: UploadFile = File(...)):
 @app.get("/files/")
 async def list_files(sort_by: Literal["upload_time", "filename"] = Query("upload_time"), order: Literal["asc", "desc"] = Query("desc")):
     try:
-        # Collect files from all buckets
-        pdf_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "pdf", "upload_time": f.uploadDate, "downloadsCount":f.downloadsCount ,"views_Count":f.viewsCount} for f in pdf_gridfs.find()]
-        image_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "image", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCount,"views_Count":f.viewsCount} for f in image_gridfs.find()]
-        json_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "json", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCount,"views_Count":f.viewsCount} for f in json_gridfs.find()]
-        other_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "other", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCount,"views_Count":f.viewsCount} for f in other_gridfs.find()]
-        word_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "word", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCount,"views_Count":f.viewsCount} for f in word_gridfs.find()]
-        text_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "text", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCount,"views_Count":f.viewsCount} for f in text_gridfs.find()]
-        csv_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "csv", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCount,"views_Count":f.viewsCount} for f in csv_gridfs.find()]
+        
+        # Helper function to process file data
+        def process_file(f, bucket):
+            return {
+                "file_id": str(f._id),
+                "filename": f.filename,
+                "content_type": f.content_type,
+                "bucket": bucket,
+                "upload_time": f.uploadDate,
+                "downloadsCount": getattr(f, 'downloadsCount', 0),
+                "views_Count": getattr(f, 'viewsCount', 0)
+            }
+            
+              # Collect files from all buckets using the helper function
+        pdf_files = [process_file(f, "pdf") for f in pdf_gridfs.find()]
+        image_files = [process_file(f, "image") for f in image_gridfs.find()]
+        json_files = [process_file(f, "json") for f in json_gridfs.find()]
+        other_files = [process_file(f, "other") for f in other_gridfs.find()]
+        word_files = [process_file(f, "word") for f in word_gridfs.find()]
+        text_files = [process_file(f, "text") for f in text_gridfs.find()]
+        csv_files = [process_file(f, "csv") for f in csv_gridfs.find()]
+
         
         file_list = pdf_files + image_files + json_files + other_files + word_files + text_files + csv_files
 
