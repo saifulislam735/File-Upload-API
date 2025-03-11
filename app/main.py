@@ -188,7 +188,7 @@ async def list_files(sort_by: Literal["upload_time", "filename"] = Query("upload
     try:
         # Collect files from all buckets
         pdf_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "pdf", "upload_time": f.uploadDate, "downloadsCount":f.downloadsCount ,"views_Count":f.viewsCount} for f in pdf_gridfs.find()]
-        image_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "image", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCountm,"views_Count":f.viewsCount} for f in image_gridfs.find()]
+        image_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "image", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCount,"views_Count":f.viewsCount} for f in image_gridfs.find()]
         json_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "json", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCount,"views_Count":f.viewsCount} for f in json_gridfs.find()]
         other_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "other", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCount,"views_Count":f.viewsCount} for f in other_gridfs.find()]
         word_files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": "word", "upload_time": f.uploadDate,"downloadsCount":f.downloadsCount,"views_Count":f.viewsCount} for f in word_gridfs.find()]
@@ -242,7 +242,7 @@ async def get_files_in_type(bucket: str, sort_by: Literal["upload_time", "filena
 async def search_pdf_by_word(word: str):
     resultsPDF = db.pdfContent.find({"content": {"$regex": word, "$options": "i"}})
     resultsWord = db.wordContent.find({"content": {"$regex": word, "$options": "i"}})
-    resultsTxt = db.txtContent.find({"content": {"$regex": word, "$options": "i"}})
+    resultsTxt = db.textContent.find({"content": {"$regex": word, "$options": "i"}})
     resultsJSON = db.jsonContent.find({"content": {"$regex": word, "$options": "i"}})
     resultsCSV = db.csvContent.find({"content": {"$regex": word, "$options": "i"}})
     
