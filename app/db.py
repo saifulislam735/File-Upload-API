@@ -13,4 +13,6 @@ json_gridfs = GridFS(db, collection="json")  # For json file
 word_gridfs = GridFS(db, collection="word")  # For word file
 text_gridfs = GridFS(db, collection="text")  # For text file
 csv_gridfs = GridFS(db, collection="csv")  # For csv file
+audio_gridfs = GridFS(db, collection="audio") #For audio file
+video_gridfs = GridFS(db, collection="video") #For video file
 other_gridfs = GridFS(db, collection="other")  # For other files

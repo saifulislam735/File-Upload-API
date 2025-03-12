@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Query 
 from fastapi.responses import StreamingResponse, JSONResponse 
 from fastapi.middleware.cors import CORSMiddleware
-from app.db import db, pdf_gridfs, image_gridfs, json_gridfs, other_gridfs, word_gridfs, text_gridfs, csv_gridfs  # Import all buckets
+from app.db import db, pdf_gridfs, image_gridfs, json_gridfs, word_gridfs, text_gridfs, csv_gridfs, audio_gridfs, video_gridfs, other_gridfs  # Import all buckets
 from app.config import MAX_FILE_SIZE, ALLOWED_TYPES
 from bson.objectid import ObjectId   
 import io
@@ -32,7 +32,7 @@ async def root():
 origins = ["*"]
 
 #Bucket and Gridfs Dictionary
-bucket_gridfs_dict = {"pdf": pdf_gridfs, "image": image_gridfs, "json": json_gridfs, "other": other_gridfs, "word": word_gridfs, "text": text_gridfs, "csv": csv_gridfs}
+bucket_gridfs_dict = {"pdf": pdf_gridfs, "image": image_gridfs, "json": json_gridfs, "word": word_gridfs, "text": text_gridfs, "csv": csv_gridfs, "audio": audio_gridfs, "video": video_gridfs, "other": other_gridfs}
 
 
 app.add_middleware(
@@ -47,7 +47,7 @@ app.add_middleware(
 def get_gridfs_bucket(content_type):
     if content_type == "application/pdf":
         return pdf_gridfs, "pdf", db.pdfContent
-    elif content_type in {"image/jpeg", "image/png"}:
+    elif content_type in {"image/jpeg", "image/png", "image/gif", "image/bmp", "image/webp", "image/tiff"}:
         return image_gridfs, "image", None
     elif content_type in {"application/json"}:
         return json_gridfs, "json", db.jsonContent
@@ -57,6 +57,10 @@ def get_gridfs_bucket(content_type):
         return text_gridfs, "text", db.textContent
     elif content_type in {"text/csv"}:
         return csv_gridfs, "csv", db.csvContent
+    elif content_type in {"audio/mpeg", "audio/wav", "audio/x-wav", "audio/ogg", "audio/webm"}:
+        return audio_gridfs, "audio", None
+    elif content_type in {"video/mp4", "video/x-msvideo", "video/x-matroska", "video/webm", "video/ogg"}:
+        return video_gridfs, "video", None
     else:
         return other_gridfs, "other", None
 
@@ -202,14 +206,16 @@ async def list_files(sort_by: Literal["upload_time", "filename"] = Query("upload
               # Collect files from all buckets using the helper function
         pdf_files = [process_file(f, "pdf") for f in pdf_gridfs.find()]
         image_files = [process_file(f, "image") for f in image_gridfs.find()]
-        json_files = [process_file(f, "json") for f in json_gridfs.find()]
-        other_files = [process_file(f, "other") for f in other_gridfs.find()]
+        json_files = [process_file(f, "json") for f in json_gridfs.find()]       
         word_files = [process_file(f, "word") for f in word_gridfs.find()]
         text_files = [process_file(f, "text") for f in text_gridfs.find()]
         csv_files = [process_file(f, "csv") for f in csv_gridfs.find()]
+        audio_files = [process_file(f, "audio") for f in audio_gridfs.find()]
+        video_files = [process_file(f, "video") for f in video_gridfs.find()]
+        other_files = [process_file(f, "other") for f in other_gridfs.find()]
 
         
-        file_list = pdf_files + image_files + json_files + other_files + word_files + text_files + csv_files
+        file_list = pdf_files + image_files + json_files + word_files + text_files + csv_files + audio_files + video_files + other_files
 
         sort_reverse = order == "desc"
         if sort_by == "filename":
@@ -234,7 +240,7 @@ async def list_files(sort_by: Literal["upload_time", "filename"] = Query("upload
 async def get_files_in_type(bucket: str, sort_by: Literal["upload_time", "filename"] = Query("upload_time"), order: Literal["asc", "desc"] = Query("desc")):
     try:
         gridfs_bucket = bucket_gridfs_dict[bucket]
-        sort_direction = 1 if order == "asc" else -1
+        # sort_direction = 1 if order == "asc" else -1
         files = [{"file_id": str(f._id), "filename": f.filename, "content_type": f.content_type, "bucket": bucket, "upload_time": f.uploadDate} for f in gridfs_bucket.find()]
         # file_data = gridfs_bucket.get(ObjectId(file_id))
 
@@ -319,6 +325,9 @@ async def search_pdf_by_word(word: str):
     if not matched_files:
         raise HTTPException(status_code=404, detail="No matching files found")
 
+    # Format the upload_time to Bangladesh time for each file
+    for file in matched_files:
+            file["upload_time"] = format_bangladesh_time(file["upload_time"])
     return {"matched_files": matched_files}
 
 # Get a file (download/stream or view inline)
@@ -391,7 +400,7 @@ async def get_file(file_id: str, bucket: str, inline: bool = False):
 
 
 # Top Dowloaded File Show 
-collections = ["pdf", "image", "json", "word", "text", "csv", "other"]
+collections = ["pdf", "image", "json", "word", "text", "csv", "audio", "video", "other"]
 @app.get("/top-downloads/")
 async def top_download_files(numbers: int = Query(5)):
     all_files = []
@@ -412,6 +421,9 @@ async def top_download_files(numbers: int = Query(5)):
             })
     # Sort all files combined
     sorted_files = sorted(all_files, key=lambda x: x["downloadsCount"], reverse=True)
+    # Format the upload_time to Bangladesh time for each file
+    for file in sorted_files:
+            file["upload_time"] = format_bangladesh_time(file["upload_time"])
     # Return top 5 overall
     return {"top_downloaded_files": sorted_files[:numbers]}
 

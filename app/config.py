@@ -19,5 +19,18 @@ ALLOWED_TYPES = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
     "application/msword",  
     "text/csv"
+        # Audio types
+    "audio/mpeg",           # .mp3
+    "audio/wav",            # .wav
+    "audio/x-wav",          # .wav (alternative)
+    "audio/ogg",            # .ogg
+    "audio/webm",           # .webm audio
+
+    # Video types
+    "video/mp4",            # .mp4
+    "video/x-msvideo",      # .avi
+    "video/x-matroska",     # .mkv
+    "video/webm",           # .webm video
+    "video/ogg"             # .ogv
 }
 # print(ALLOWED_TYPES)
