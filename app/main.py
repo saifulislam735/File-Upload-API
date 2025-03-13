@@ -29,7 +29,8 @@ async def root():
     return {"message": "I am alive"}
 
 # origins = ["https://cheerful-froyo-4df5ef.netlify.app"]
-origins = ["*"]
+# origins = ["*"]
+origins = ["https://cheerful-froyo-4df5ef.netlify.app"]
 
 #Bucket and Gridfs Dictionary
 bucket_gridfs_dict = {"pdf": pdf_gridfs, "image": image_gridfs, "json": json_gridfs, "word": word_gridfs, "text": text_gridfs, "csv": csv_gridfs, "audio": audio_gridfs, "video": video_gridfs, "other": other_gridfs}
